@@ -5,15 +5,12 @@ enum TagFileFormat: String, CaseIterable {
     /// UE5 DataTable CSV 格式(`Name,Tag,DevComment,CategoryText`),
     /// 可直接 Import 到 UE Content Browser 当 `GameplayTagTableRow`。
     case dataTableCSV
-    /// 扩展 CSV(本工具自带),含 Hidden 等元数据。
-    case extendedCSV
     /// UE5 ini 配置文件。
     case ini
 
     var displayName: String {
         switch self {
         case .dataTableCSV: return "UE5 DataTable CSV"
-        case .extendedCSV:  return "Extended CSV (本工具)"
         case .ini:          return "UE5 ini (Config/Tags)"
         }
     }
@@ -21,7 +18,6 @@ enum TagFileFormat: String, CaseIterable {
     var fileExtension: String {
         switch self {
         case .dataTableCSV: return "csv"
-        case .extendedCSV:  return "csv"
         case .ini:          return "ini"
         }
     }
@@ -36,7 +32,6 @@ enum CSVBridge {
     static func export(_ nodes: [GameplayTagNode], format: TagFileFormat) -> String {
         switch format {
         case .dataTableCSV: return dataTableCSV(nodes)
-        case .extendedCSV:  return extendedCSV(nodes)
         case .ini:          return ini(nodes)
         }
     }
@@ -69,26 +64,6 @@ enum CSVBridge {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    /// 扩展 CSV。本工具私有格式,带 `Hidden` 字段,信息最完整。
-    static func extendedCSV(_ nodes: [GameplayTagNode]) -> String {
-        let header = ["Name", "DevComment", "Category", "Hidden"]
-        var lines: [String] = [header.joined(separator: ",")]
-        func walk(_ list: [GameplayTagNode]) {
-            for n in list {
-                let t = n.tag
-                lines.append([
-                    CSVParser.escape(t.name),
-                    CSVParser.escape(t.devComment),
-                    CSVParser.escape(t.category ?? ""),
-                    t.isHidden ? "true" : "false"
-                ].joined(separator: ","))
-                walk(n.children)
-            }
-        }
-        walk(nodes)
-        return lines.joined(separator: "\n") + "\n"
-    }
-
     /// UE5 ini 配置文件。放到 `Config/Tags/<name>.ini` 即可被 UE 加载。
     static func ini(_ nodes: [GameplayTagNode]) -> String {
         var lines: [String] = ["[/Script/GameplayTags.GameplayTagsList]"]
@@ -108,7 +83,7 @@ enum CSVBridge {
 
     // MARK: - 入口:反序列化
 
-    /// 自动检测格式并解析。返回的格式标识可用于「原始 CSV」面板展示。
+    /// 自动检测格式并解析。返回的格式标识可用于「原始文件」面板展示。
     static func parse(_ text: String) -> (tags: [GameplayTag], format: TagFileFormat) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("[/Script/GameplayTags") {
@@ -118,60 +93,18 @@ enum CSVBridge {
         guard let header = rows.first, !header.isEmpty else {
             return ([], .dataTableCSV)
         }
-        if isUE5DataTableCSVHeader(header) {
-            return (parseDataTableCSV(rows, header: header), .dataTableCSV)
-        }
-        return (parseExtendedCSV(rows, header: header), .extendedCSV)
+        return (parseDataTableCSV(rows, header: header), .dataTableCSV)
     }
 
-    /// 判断 CSV 表头是否为 UE5 GameplayTagTableRow 格式。
-    private static func isUE5DataTableCSVHeader(_ header: [String]) -> Bool {
-        let trimmed = header.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        let lower = trimmed.map { $0.lowercased() }
-
-        if lower.contains("tag") { return true }
-
-        // 旧版 UE 导出: 首列标题为空(行号列),后面是 Tag 等字段
-        if trimmed.first?.isEmpty == true, header.count >= 2 { return true }
-
-        return false
-    }
-
-    /// 解析扩展 CSV。
-    static func parseExtendedCSV(_ rows: [[String]], header: [String]) -> [GameplayTag] {
-        let nameIdx       = header.firstIndex { $0.lowercased() == "name" } ?? 0
-        let devCommentIdx = header.firstIndex {
-            $0.lowercased().contains("dev") && $0.lowercased().contains("comment")
-        } ?? 1
-        let categoryIdx   = header.firstIndex { $0.lowercased() == "category" } ?? 2
-        let hiddenIdx     = header.firstIndex { $0.lowercased() == "hidden" } ?? 3
-
-        var out: [GameplayTag] = []
-        for row in rows.dropFirst() {
-            if row.allSatisfy({ $0.isEmpty }) { continue }
-            let name = row.indices.contains(nameIdx) ? row[nameIdx].trimmingCharacters(in: .whitespaces) : ""
-            if name.isEmpty { continue }
-            let dev = row.indices.contains(devCommentIdx) ? row[devCommentIdx] : ""
-            let cat = row.indices.contains(categoryIdx) ? row[categoryIdx] : ""
-            let hid = row.indices.contains(hiddenIdx)
-                && (row[hiddenIdx].lowercased() == "true" || row[hiddenIdx] == "1")
-            out.append(GameplayTag(
-                name: name,
-                devComment: dev,
-                category: cat.isEmpty ? nil : cat,
-                isHidden: hid
-            ))
-        }
-        return out
-    }
-
-    /// 解析 UE5 DataTable CSV。
+    /// 解析 UE5 DataTable CSV(兼容旧版表头与 `Name` 列写法)。
     static func parseDataTableCSV(_ rows: [[String]], header: [String]) -> [GameplayTag] {
         let lower = header.map { $0.lowercased() }
-        let tagIdx    = lower.firstIndex { $0 == "tag" } ?? 1
-        let devIdx    = lower.firstIndex { $0 == "devcomment" }
+        let tagIdx = lower.firstIndex { $0 == "tag" }
+            ?? lower.firstIndex { $0 == "name" }
+            ?? 1
+        let devIdx = lower.firstIndex { $0 == "devcomment" }
             ?? lower.firstIndex { $0.contains("dev") && $0.contains("comment") }
-        let catIdx    = lower.firstIndex { $0 == "categorytext" }
+        let catIdx = lower.firstIndex { $0 == "categorytext" }
             ?? lower.firstIndex { $0 == "category" }
 
         var out: [GameplayTag] = []

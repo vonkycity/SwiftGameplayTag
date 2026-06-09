@@ -74,7 +74,7 @@ extension NSSavePanel {
     static func run(format: TagFileFormat, completion: @escaping (URL?) -> Void) {
         let panel = NSSavePanel()
         switch format {
-        case .dataTableCSV, .extendedCSV:
+        case .dataTableCSV:
             panel.allowedContentTypes = [.commaSeparatedText]
             panel.nameFieldStringValue = defaultName(format: format, ext: "csv")
         case .ini:
@@ -91,7 +91,6 @@ extension NSSavePanel {
     private static func defaultName(format: TagFileFormat, ext: String) -> String {
         switch format {
         case .dataTableCSV: return "GameplayTagTable.\(ext)"
-        case .extendedCSV:  return "GameplayTags.\(ext)"
         case .ini:          return "DefaultGameplayTags.\(ext)"
         }
     }

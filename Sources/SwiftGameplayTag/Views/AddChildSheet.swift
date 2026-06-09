@@ -64,7 +64,7 @@ struct AddChildSheet: View {
             error = "无法添加子 Tag"
             return
         }
-        store.selectNode(newID)
+        store.selectNodeFromTable(newID)
         dismiss()
     }
 }

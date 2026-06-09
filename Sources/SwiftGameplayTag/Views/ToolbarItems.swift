@@ -39,9 +39,9 @@ struct ToolbarItems: ToolbarContent {
                 store.refreshCSVText()
                 showRaw = true
             } label: {
-                Label("原始 CSV", systemImage: "doc.plaintext")
+                Label("原始文件", systemImage: "doc.plaintext")
             }
-            .help("查看原始 CSV 文本")
+            .help("查看磁盘原文或当前格式的导出预览")
         }
 
         ToolbarItem(placement: .primaryAction) {

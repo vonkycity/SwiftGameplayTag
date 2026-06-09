@@ -12,7 +12,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "SwiftGameplayTag",
-            path: "Sources/SwiftGameplayTag"
+            path: "Sources/SwiftGameplayTag",
+            resources: [.process("Resources")]
         ),
         .testTarget(
             name: "SwiftGameplayTagTests",

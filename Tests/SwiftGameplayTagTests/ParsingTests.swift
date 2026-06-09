@@ -28,19 +28,6 @@ final class CSVParserTests: XCTestCase {
 }
 
 final class CSVBridgeTests: XCTestCase {
-    func testExtendedCSV_roundTrip() {
-        let tags = [
-            GameplayTag(name: "Combat.Fire", devComment: "火", category: "Combat", isHidden: false),
-            GameplayTag(name: "Status.Burning", devComment: "燃烧", category: nil, isHidden: true)
-        ]
-        let text = CSVBridge.export(TagTreeBuilder.build(from: tags), format: .extendedCSV)
-        let parsed = CSVBridge.parse(text)
-        XCTAssertEqual(parsed.format, .extendedCSV)
-        XCTAssertEqual(parsed.tags.map(\.name), ["Combat", "Combat.Fire", "Status", "Status.Burning"])
-        XCTAssertEqual(parsed.tags[1].devComment, "火")
-        XCTAssertTrue(parsed.tags[3].isHidden)
-    }
-
     func testDataTableCSV_export() {
         let tags = [GameplayTag(name: "Combat.Fire", devComment: "火", category: "Combat")]
         let csv = CSVBridge.export(TagTreeBuilder.build(from: tags), format: .dataTableCSV)
@@ -129,10 +116,23 @@ final class CSVBridgeTests: XCTestCase {
         XCTAssertEqual(parsed.tags.first?.devComment, #"She said "hi""#)
     }
 
+    func testNameColumnCSV_parse() {
+        let csv = """
+        Name,DevComment,Category
+        Combat.Fire,火,Combat
+        Status.Burning,燃烧,
+        """
+        let parsed = CSVBridge.parse(csv)
+        XCTAssertEqual(parsed.format, .dataTableCSV)
+        XCTAssertEqual(parsed.tags.map(\.name), ["Combat.Fire", "Status.Burning"])
+        XCTAssertEqual(parsed.tags[0].devComment, "火")
+        XCTAssertEqual(parsed.tags[0].category, "Combat")
+    }
+
     func testFormatAutoDetect() {
         XCTAssertEqual(CSVBridge.parse("Name,Tag,DevComment,CategoryText\n0,A,B,C").format, .dataTableCSV)
         XCTAssertEqual(CSVBridge.parse(",Tag,DevComment,CategoryText\n0,A,B,C").format, .dataTableCSV)
-        XCTAssertEqual(CSVBridge.parse("Name,DevComment\nA,B").format, .extendedCSV)
+        XCTAssertEqual(CSVBridge.parse("Name,DevComment\nA,B").format, .dataTableCSV)
         XCTAssertEqual(CSVBridge.parse("[/Script/GameplayTags.GameplayTagsList]\nGameplayTagList=(Tag=\"A\")").format, .ini)
     }
 }
@@ -169,6 +169,49 @@ final class TagStoreTests: XCTestCase {
         XCTAssertTrue(ini.contains("[/Script/GameplayTags.GameplayTagsList]"))
         let csv = store.exportText(format: .dataTableCSV)
         XCTAssertTrue(csv.hasPrefix("Name,Tag,DevComment,CategoryText"))
+    }
+
+    @MainActor
+    func testLoadFilePreservesSourceTextForPreview() throws {
+        let store = TagStore()
+        let dir = FileManager.default.temporaryDirectory
+        let url = dir.appendingPathComponent("SwiftGameplayTagPreview-\(UUID().uuidString).ini")
+        let source = """
+        [/Script/GameplayTags.GameplayTagsList]
+        GameplayTagList=(Tag="Combat.Fire",DevComment="火")
+        """
+        try source.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try store.loadFile(from: url)
+        XCTAssertEqual(store.currentFormat, .ini)
+        XCTAssertTrue(store.rawPreviewShowsLoadedText)
+        store.refreshCSVText()
+        XCTAssertEqual(store.csvText, source)
+    }
+
+    @MainActor
+    func testDirtyPreviewUsesExport() throws {
+        let store = TagStore()
+        let dir = FileManager.default.temporaryDirectory
+        let url = dir.appendingPathComponent("SwiftGameplayTagPreview-\(UUID().uuidString).csv")
+        let source = """
+        Name,Tag,DevComment,CategoryText
+        0,Combat.Fire,火,Combat
+        """
+        try source.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try store.loadFile(from: url)
+        guard let id = store.flatTags.first(where: { $0.name == "Combat.Fire" })?.id else {
+            XCTFail("missing tag")
+            return
+        }
+        store.updateMetadata(id: id, devComment: "新注释")
+        store.refreshCSVText()
+        XCTAssertFalse(store.rawPreviewShowsLoadedText)
+        XCTAssertTrue(store.csvText.contains("新注释"))
+        XCTAssertFalse(store.csvText == source)
     }
 
     @MainActor

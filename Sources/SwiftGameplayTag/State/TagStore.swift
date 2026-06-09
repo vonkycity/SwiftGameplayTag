@@ -23,6 +23,8 @@ final class TagStore {
     var searchQuery: String = ""
     var selectedNodeIDs: Set<UUID> = []
     private(set) var documentGeneration = UUID()
+    /// 右侧 Table 用户点击后请求左侧树展开到选中项。
+    private(set) var shouldRevealSelectionInTree = false
     /// 节点内容变更计数,驱动左侧树在 metadata 编辑后刷新。
     private(set) var contentRevision: Int = 0
 
@@ -35,6 +37,15 @@ final class TagStore {
         } else {
             selectedNodeIDs = []
         }
+    }
+
+    func selectNodeFromTable(_ id: UUID?) {
+        selectNode(id)
+        shouldRevealSelectionInTree = id != nil
+    }
+
+    func clearSelectionRevealRequest() {
+        shouldRevealSelectionInTree = false
     }
 
     /// 窗口标题(含修改标记)。
@@ -51,6 +62,7 @@ final class TagStore {
 
     @ObservationIgnored private var undoStack: [UndoEntry] = []
     @ObservationIgnored private var redoStack: [UndoEntry] = []
+    @ObservationIgnored private var loadedFileText: String?
     @ObservationIgnored private let maxHistory = 100
 
     var canUndo: Bool { !undoStack.isEmpty }
@@ -90,9 +102,18 @@ final class TagStore {
         return flatTags.filter { visible.contains($0.id) }
     }
 
-    /// 确保 csvText 为最新(打开 Raw 预览前调用)。
+    /// 原始文件预览是否展示已加载文本(未修改)。
+    var rawPreviewShowsLoadedText: Bool {
+        !isDirty && loadedFileText != nil
+    }
+
+    /// 确保 csvText 为最新(打开原始文件预览前调用)。
     func refreshCSVText() {
-        csvText = CSVBridge.export(roots, format: .extendedCSV)
+        if !isDirty, let text = loadedFileText {
+            csvText = text
+        } else {
+            csvText = CSVBridge.export(roots, format: currentFormat)
+        }
     }
 
     // MARK: - 加载 / 导出
@@ -102,21 +123,26 @@ final class TagStore {
         let parsed = CSVBridge.parse(text)
         undoStack.removeAll()
         redoStack.removeAll()
-        applyTags(parsed.tags, recordHistory: false)
         currentURL = url
         currentFormat = parsed.format
+        loadedFileText = text
         isDirty = false
+        applyTags(parsed.tags, recordHistory: false)
+        csvText = text
         resetSelection(selectFirst: true)
     }
 
     func loadSample() {
-        let parsed = CSVBridge.parse(SampleCSV.content)
+        let text = SampleCSV.content
+        let parsed = CSVBridge.parse(text)
         undoStack.removeAll()
         redoStack.removeAll()
-        applyTags(parsed.tags, recordHistory: false)
-        currentFormat = parsed.format
         currentURL = nil
+        loadedFileText = text
+        currentFormat = parsed.format
         isDirty = false
+        applyTags(parsed.tags, recordHistory: false)
+        csvText = text
         resetSelection(selectFirst: true)
     }
 
@@ -139,6 +165,7 @@ final class TagStore {
         try text.write(to: url, atomically: true, encoding: .utf8)
         currentURL = url
         currentFormat = format
+        loadedFileText = text
         csvText = text
         isDirty = false
     }
@@ -520,7 +547,7 @@ final class TagStore {
 
     private func rebuildDerivedState(regenerateCSV: Bool) {
         if regenerateCSV {
-            csvText = CSVBridge.export(roots, format: .extendedCSV)
+            refreshCSVText()
         }
 
         var flat: [GameplayTag] = []

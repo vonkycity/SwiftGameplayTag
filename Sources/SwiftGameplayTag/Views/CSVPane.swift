@@ -94,7 +94,13 @@ struct CSVPane: View {
             return
         }
 
-        store.selectedNodeIDs = ids
+        if ids.count == 1 {
+            store.selectNodeFromTable(ids.first)
+        } else if ids.isEmpty {
+            store.selectNode(nil)
+        } else {
+            store.selectedNodeIDs = ids
+        }
     }
 
     private func scrollToSelection(_ id: UUID?, proxy: ScrollViewProxy) {

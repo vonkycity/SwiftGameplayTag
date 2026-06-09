@@ -7,6 +7,8 @@ struct TagTreeSidebar: View {
     @State private var dropTargetID: UUID?
     @State private var rootDropTargeted = false
     @State private var addChildParentID: UUID?
+    /// 抑制加载阶段 Table 同步选择时触开展开。
+    @State private var suppressSelectionReveal = true
 
     private struct RenameState: Equatable {
         let id: GameplayTagNode.ID
@@ -42,7 +44,7 @@ struct TagTreeSidebar: View {
                     isLeaf: node.isLeaf,
                     childCount: node.children.count
                 ))
-                if !node.isLeaf, expandedNodeIDs.contains(node.id) {
+                if shouldDescend(into: node) {
                     walk(node.children, depth: depth + 1)
                 }
             }
@@ -69,33 +71,25 @@ struct TagTreeSidebar: View {
                 }
                 .listStyle(.sidebar)
                 .onAppear {
-                    if expandedNodeIDs.isEmpty {
-                        expandedNodeIDs = allFolderIDs()
-                    }
                     scrollToSelection(proxy: proxy)
+                    DispatchQueue.main.async { suppressSelectionReveal = false }
                 }
                 .onChange(of: store.selectedNodeIDs) { _, newValue in
                     let newID = newValue.first
                     if renaming != nil, newID != renaming?.id {
                         commitActiveRename()
                     }
-                    expandAncestors(of: newID)
-                    scrollToSelection(proxy: proxy)
-                }
-                .onChange(of: store.contentRevision) { _, _ in
-                    expandedNodeIDs.formUnion(allFolderIDs())
-                    expandAncestors(of: store.selectedNodeID)
+                    if store.shouldRevealSelectionInTree, !suppressSelectionReveal {
+                        revealPathToSelection()
+                        store.clearSelectionRevealRequest()
+                    }
                     scrollToSelection(proxy: proxy)
                 }
                 .onChange(of: store.documentGeneration) { _, _ in
-                    expandedNodeIDs = allFolderIDs()
-                    expandAncestors(of: store.selectedNodeID)
+                    expandedNodeIDs.removeAll()
+                    suppressSelectionReveal = true
                     scrollToSelection(proxy: proxy)
-                }
-                .onChange(of: store.searchQuery) { _, _ in
-                    if let visible = searchVisible {
-                        expandedNodeIDs.formUnion(visible)
-                    }
+                    DispatchQueue.main.async { suppressSelectionReveal = false }
                 }
                 .contextMenu(forSelectionType: UUID.self) { ids in
                     if let id = ids.first, let node = store.findNode(id: id) {
@@ -210,7 +204,7 @@ struct TagTreeSidebar: View {
                     action: tagDropAction(for: item.node, modifiers: modifiers)
                 )
                 if ok {
-                    expandAncestors(of: payload.id)
+                    revealPathTo(nodeID: payload.id)
                     expandedNodeIDs.insert(item.node.id)
                     dropTargetID = nil
                 }
@@ -222,7 +216,10 @@ struct TagTreeSidebar: View {
     private var listSelection: Binding<UUID?> {
         Binding(
             get: { store.selectedNodeIDs.first },
-            set: { store.selectNode($0) }
+            set: { id in
+                store.selectNode(id)
+                if let id { revealPathTo(nodeID: id) }
+            }
         )
     }
 
@@ -244,17 +241,25 @@ struct TagTreeSidebar: View {
         }
     }
 
-    private func allFolderIDs() -> Set<UUID> {
-        var ids: Set<UUID> = []
-        GameplayTagNode.forEach(in: store.roots) { node in
-            if !node.isLeaf { ids.insert(node.id) }
-        }
-        return ids
+    private func shouldDescend(into node: GameplayTagNode) -> Bool {
+        guard !node.isLeaf else { return false }
+        if expandedNodeIDs.contains(node.id) { return true }
+        guard let visible = searchVisible else { return false }
+        return node.children.contains { hasVisibleDescendant($0, visible: visible) }
     }
 
-    private func expandAncestors(of id: UUID?) {
-        guard let id, let node = store.findNode(id: id) else { return }
-        var parent = node.parent
+    private func hasVisibleDescendant(_ node: GameplayTagNode, visible: Set<UUID>) -> Bool {
+        if visible.contains(node.id) { return true }
+        return node.children.contains { hasVisibleDescendant($0, visible: visible) }
+    }
+
+    private func revealPathToSelection() {
+        revealPathTo(nodeID: store.selectedNodeID)
+    }
+
+    private func revealPathTo(nodeID: UUID?) {
+        guard let nodeID, store.findNode(id: nodeID) != nil else { return }
+        var parent = store.findNode(id: nodeID)?.parent
         while let p = parent {
             expandedNodeIDs.insert(p.id)
             parent = p.parent

@@ -9,7 +9,7 @@ struct RawCSVWindow: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("原始文件预览").font(.headline)
-                    Text(currentFormatLabel)
+                    Text(previewSubtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -43,12 +43,32 @@ struct RawCSVWindow: View {
             }
             .padding(12)
         }
+        .onAppear { store.refreshCSVText() }
+        .onChange(of: store.contentRevision) { _, _ in
+            store.refreshCSVText()
+        }
+        .onChange(of: store.isDirty) { _, _ in
+            store.refreshCSVText()
+        }
+        .onChange(of: store.currentFormat) { _, _ in
+            store.refreshCSVText()
+        }
     }
 
-    private var currentFormatLabel: String {
-        if let url = store.currentURL {
-            return "\(url.lastPathComponent) · 格式:\(store.currentFormat.displayName)"
+    private var previewSubtitle: String {
+        let format = store.currentFormat.displayName
+        if store.rawPreviewShowsLoadedText, let url = store.currentURL {
+            return "\(url.lastPathComponent) · 磁盘原文 · \(format)"
         }
-        return "格式:\(store.currentFormat.displayName)"
+        if store.rawPreviewShowsLoadedText {
+            return "内置示例 sample.csv · \(format)"
+        }
+        if store.isDirty {
+            return "导出预览 · \(format) · 已修改"
+        }
+        if store.currentURL != nil {
+            return "导出预览 · \(format)"
+        }
+        return "导出预览 · \(format)"
     }
 }

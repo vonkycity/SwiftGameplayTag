@@ -47,7 +47,6 @@ struct ContentView: View {
             RawCSVWindow()
                 .environment(store)
                 .frame(minWidth: 520, minHeight: 480)
-                .onAppear { store.refreshCSVText() }
         }
         .alert("出错了", isPresented: Binding(
             get: { alertMessage != nil },
