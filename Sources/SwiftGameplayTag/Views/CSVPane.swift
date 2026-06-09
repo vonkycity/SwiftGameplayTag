@@ -30,24 +30,6 @@ struct CSVPane: View {
                     }
                 }
                 .width(min: 120, ideal: 200)
-
-                TableColumn("Category", value: \.optionalCategory) { tag in
-                    TableTextCell(value: tag.category ?? "") { newValue in
-                        if newValue.isEmpty {
-                            store.updateMetadata(id: tag.id, clearCategory: true)
-                        } else {
-                            store.updateMetadata(id: tag.id, category: newValue)
-                        }
-                    }
-                }
-                .width(min: 80, ideal: 120)
-
-                TableColumn("Hidden") { (tag: GameplayTag) in
-                    Toggle("", isOn: hiddenBinding(tag.id))
-                        .toggleStyle(.checkbox)
-                        .labelsHidden()
-                }
-                .width(60)
             }
             .id(store.documentGeneration)
             .contextMenu(forSelectionType: GameplayTag.ID.self) { ids in
@@ -138,13 +120,6 @@ struct CSVPane: View {
         }
         store.rename(id: id, to: newLeaf)
     }
-
-    private func hiddenBinding(_ id: UUID) -> Binding<Bool> {
-        Binding(
-            get: { store.findNode(id: id)?.tag.isHidden ?? false },
-            set: { store.updateMetadata(id: id, isHidden: $0) }
-        )
-    }
 }
 
 private struct TableTextCell: View {
@@ -181,8 +156,4 @@ private struct TableTextCell: View {
         guard draft != value else { return }
         onCommit(draft)
     }
-}
-
-private extension GameplayTag {
-    var optionalCategory: String { category ?? "" }
 }

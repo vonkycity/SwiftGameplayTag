@@ -256,34 +256,13 @@ final class TagStore {
         markDirty()
     }
 
-    func updateMetadata(id: GameplayTagNode.ID,
-                        devComment: String? = nil,
-                        category: String? = nil,
-                        isHidden: Bool? = nil,
-                        clearCategory: Bool = false) {
+    func updateMetadata(id: GameplayTagNode.ID, devComment: String) {
         guard let node = findNode(id: id) else { return }
-
-        let newDevComment = devComment ?? node.tag.devComment
-        let newCategory: String?
-        if clearCategory {
-            newCategory = nil
-        } else if let v = category {
-            newCategory = v.isEmpty ? nil : v
-        } else {
-            newCategory = node.tag.category
-        }
-        let newHidden = isHidden ?? node.tag.isHidden
-
-        let changed = newDevComment != node.tag.devComment
-            || newCategory != node.tag.category
-            || newHidden != node.tag.isHidden
-        guard changed else { return }
+        guard devComment != node.tag.devComment else { return }
 
         recordMetadataHistory(node: node)
         var updated = node.tag
-        updated.devComment = newDevComment
-        updated.category = newCategory
-        updated.isHidden = newHidden
+        updated.devComment = devComment
         node.tag = updated
         rebuildDerivedState(regenerateCSV: false)
         markDirty()
@@ -536,8 +515,6 @@ final class TagStore {
     private func applyMetadataSnapshot(nodeID: UUID, snapshot: GameplayTag) {
         guard let node = findNode(id: nodeID) else { return }
         node.tag.devComment = snapshot.devComment
-        node.tag.category = snapshot.category
-        node.tag.isHidden = snapshot.isHidden
         rebuildDerivedState(regenerateCSV: false)
     }
 
@@ -617,8 +594,6 @@ final class TagStore {
     private func matchesSearch(_ node: GameplayTagNode, query: String) -> Bool {
         if node.tag.name.range(of: query, options: .caseInsensitive) != nil { return true }
         if node.tag.devComment.range(of: query, options: .caseInsensitive) != nil { return true }
-        if let cat = node.tag.category,
-           cat.range(of: query, options: .caseInsensitive) != nil { return true }
         return false
     }
 }

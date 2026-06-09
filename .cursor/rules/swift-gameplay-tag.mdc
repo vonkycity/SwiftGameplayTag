@@ -1,0 +1,72 @@
+---
+description: SwiftGameplayTag 项目约定与架构（UE5 GameplayTag macOS 编辑器）
+alwaysApply: true
+---
+
+# SwiftGameplayTag 项目规则
+
+## 项目定位
+
+- macOS SwiftUI 工具，编辑 Unreal Engine 5 **GameplayTag**
+- 参考实现：`/Volumes/TiPlus7100/SwiftGameTools/GameplayTags`
+- UI 文案使用**中文**；注释可中文
+
+## 技术栈
+
+- Swift 6.2、SwiftPM、`swift-tools-version: 6.2`
+- 目标平台：**macOS 26+**
+- 状态管理：`@Observable`（`TagStore`、`FileCommands`），通过 `.environment()` 注入
+- 勿回退到 `ObservableObject` / `@Published`
+
+## 目录与职责
+
+```
+Sources/SwiftGameplayTag/
+├── State/TagStore.swift      # 树 CRUD、撤销/重做、选择、文件状态
+├── State/FileCommands.swift  # 打开/保存触发器
+├── Parsing/CSVBridge.swift   # CSV / ini 互转
+├── Parsing/TagTreeBuilder.swift
+├── Views/ContentView.swift   # NavigationSplitView 双栏
+├── Views/TagTreeSidebar.swift
+├── Views/CSVPane.swift
+└── Resources/sample.csv      # 内置示例（bundle 资源）
+```
+
+## 文件格式（重要）
+
+**仅支持两种导出格式**，不要引入 Extended CSV 或额外列：
+
+| 格式 | 说明 |
+|------|------|
+| **UE5 DataTable CSV** | 表头 `Name,Tag,DevComment` |
+| **UE5 ini** | `[/Script/GameplayTags.GameplayTagsList]` + `GameplayTagList=(Tag="...",DevComment="...")` |
+
+- `GameplayTag` 只有 `name`、`devComment`；**无 Category、无 Hidden**
+- 打开旧 CSV 若含 `CategoryText` 列，解析时**忽略**
+- 原始文件预览：未修改时显示磁盘原文；修改后显示当前格式导出
+
+## UI 行为
+
+- 左侧树**默认折叠**；用户点击树/表格或添加子 Tag 时才展开路径
+- 选择同步：`selectedNodeIDs: Set<UUID>`；Table 需本地 `tableSelection` 镜像
+- 拖拽：右侧 `≡` 手柄；folder 上 drop 为子级，leaf 上为同级
+- 单一 `.fileImporter` 放在 `ContentView`，按扩展名自动识别 CSV/ini
+
+## 编码原则
+
+- **最小 diff**：只改与任务相关的文件
+- 匹配现有命名、结构与注释风格；不过度抽象
+- 有意义的测试放 `Tests/SwiftGameplayTagTests/ParsingTests.swift`
+- 未要求时不改 README、不主动 git commit
+
+## 构建与打包
+
+```bash
+swift test
+swift build -c release
+./scripts/make_app.sh          # 生成 SwiftGameplayTag.app
+swift scripts/generate_app_icon.swift Resources/AppIcon-1024.png  # 重生成图标
+```
+
+- 图标：`Resources/AppIcon.icns`（UE 深色底，由 `scripts/generate_app_icon.swift` 生成）
+- `.gitignore` 已忽略 `.build/`、`SwiftGameplayTag.app/`

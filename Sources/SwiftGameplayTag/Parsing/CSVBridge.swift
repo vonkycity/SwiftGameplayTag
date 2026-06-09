@@ -2,7 +2,7 @@ import Foundation
 
 /// GameplayTag 文件格式。
 enum TagFileFormat: String, CaseIterable {
-    /// UE5 DataTable CSV 格式(`Name,Tag,DevComment,CategoryText`),
+    /// UE5 DataTable CSV 格式(`Name,Tag,DevComment`),
     /// 可直接 Import 到 UE Content Browser 当 `GameplayTagTableRow`。
     case dataTableCSV
     /// UE5 ini 配置文件。
@@ -39,22 +39,20 @@ enum CSVBridge {
     /// UE5 DataTable CSV。
     /// 格式:
     /// ```
-    /// Name,Tag,DevComment,CategoryText
-    /// 0,Combat.Damage.Burning,燃烧,Combat
-    /// 1,Status.Burning,燃烧状态,
+    /// Name,Tag,DevComment
+    /// 0,Combat.Damage.Burning,燃烧
+    /// 1,Status.Burning,燃烧状态
     /// ```
     static func dataTableCSV(_ nodes: [GameplayTagNode]) -> String {
-        var lines: [String] = ["Name,Tag,DevComment,CategoryText"]
+        var lines: [String] = ["Name,Tag,DevComment"]
         var rowIndex = 0
         func walk(_ list: [GameplayTagNode]) {
             for n in list {
                 let t = n.tag
-                let cat = t.category ?? ""
                 lines.append([
                     String(rowIndex),
                     CSVParser.escape(t.name),
-                    CSVParser.escape(t.devComment),
-                    CSVParser.escape(cat)
+                    CSVParser.escape(t.devComment)
                 ].joined(separator: ","))
                 rowIndex += 1
                 walk(n.children)
@@ -104,8 +102,6 @@ enum CSVBridge {
             ?? 1
         let devIdx = lower.firstIndex { $0 == "devcomment" }
             ?? lower.firstIndex { $0.contains("dev") && $0.contains("comment") }
-        let catIdx = lower.firstIndex { $0 == "categorytext" }
-            ?? lower.firstIndex { $0 == "category" }
 
         var out: [GameplayTag] = []
         for row in rows.dropFirst() {
@@ -113,12 +109,7 @@ enum CSVBridge {
             let name = row.indices.contains(tagIdx) ? row[tagIdx].trimmingCharacters(in: .whitespaces) : ""
             if name.isEmpty { continue }
             let dev = (devIdx.flatMap { row.indices.contains($0) ? row[$0] : nil }) ?? ""
-            let cat = (catIdx.flatMap { row.indices.contains($0) ? row[$0] : nil }) ?? ""
-            out.append(GameplayTag(
-                name: name,
-                devComment: dev,
-                category: cat.isEmpty ? nil : cat
-            ))
+            out.append(GameplayTag(name: name, devComment: dev))
         }
         return out
     }
@@ -141,8 +132,7 @@ enum CSVBridge {
             if name.isEmpty { continue }
             out.append(GameplayTag(
                 name: name,
-                devComment: kv["DevComment"] ?? "",
-                category: kv["CategoryText"]
+                devComment: kv["DevComment"] ?? ""
             ))
         }
         return out

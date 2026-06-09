@@ -7,21 +7,15 @@ struct GameplayTag: Identifiable, Hashable, Codable {
     let id: UUID
     var name: String
     var devComment: String
-    var category: String?
-    var isHidden: Bool
 
     init(
         id: UUID = UUID(),
         name: String,
-        devComment: String = "",
-        category: String? = nil,
-        isHidden: Bool = false
+        devComment: String = ""
     ) {
         self.id = id
         self.name = name
         self.devComment = devComment
-        self.category = category
-        self.isHidden = isHidden
     }
 
     /// 路径分段。

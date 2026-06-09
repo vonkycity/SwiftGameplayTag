@@ -29,31 +29,30 @@ final class CSVParserTests: XCTestCase {
 
 final class CSVBridgeTests: XCTestCase {
     func testDataTableCSV_export() {
-        let tags = [GameplayTag(name: "Combat.Fire", devComment: "火", category: "Combat")]
+        let tags = [GameplayTag(name: "Combat.Fire", devComment: "火")]
         let csv = CSVBridge.export(TagTreeBuilder.build(from: tags), format: .dataTableCSV)
         let lines = csv.split(separator: "\n").map(String.init)
-        XCTAssertEqual(lines[0], "Name,Tag,DevComment,CategoryText")
-        XCTAssertEqual(lines[1], "0,Combat,,")
-        XCTAssertEqual(lines[2], "1,Combat.Fire,火,Combat")
+        XCTAssertEqual(lines[0], "Name,Tag,DevComment")
+        XCTAssertEqual(lines[1], "0,Combat,")
+        XCTAssertEqual(lines[2], "1,Combat.Fire,火")
     }
 
     func testDataTableCSV_parse() {
         let csv = """
-        Name,Tag,DevComment,CategoryText
-        0,Damage.Burning,燃烧,Combat
-        1,Damage.Poison,中毒,Combat
+        Name,Tag,DevComment
+        0,Damage.Burning,燃烧
+        1,Damage.Poison,中毒
         """
         let parsed = CSVBridge.parse(csv)
         XCTAssertEqual(parsed.format, .dataTableCSV)
         XCTAssertEqual(parsed.tags.map(\.name), ["Damage.Burning", "Damage.Poison"])
         XCTAssertEqual(parsed.tags[0].devComment, "燃烧")
-        XCTAssertEqual(parsed.tags[0].category, "Combat")
     }
 
     func testDataTableCSV_parseLegacyHeader() {
         let csv = """
-        ,Tag,DevComment,CategoryText
-        0,Damage.Burning,燃烧,Combat
+        ,Tag,DevComment
+        0,Damage.Burning,燃烧
         """
         let parsed = CSVBridge.parse(csv)
         XCTAssertEqual(parsed.format, .dataTableCSV)
@@ -61,22 +60,32 @@ final class CSVBridgeTests: XCTestCase {
     }
 
     func testLegacyOpenSaveUpgradesNameColumn() {
-        let legacy = ",Tag,DevComment,CategoryText\n0,Combat.Fire,火,Combat\n"
+        let legacy = ",Tag,DevComment\n0,Combat.Fire,火\n"
         let parsed = CSVBridge.parse(legacy)
         XCTAssertEqual(parsed.format, .dataTableCSV)
         let exported = CSVBridge.export(TagTreeBuilder.build(from: parsed.tags), format: .dataTableCSV)
-        XCTAssertTrue(exported.hasPrefix("Name,Tag,DevComment,CategoryText\n"))
-        XCTAssertTrue(exported.contains("0,Combat,,"))
-        XCTAssertTrue(exported.contains("1,Combat.Fire,火,Combat"))
+        XCTAssertTrue(exported.hasPrefix("Name,Tag,DevComment\n"))
+        XCTAssertTrue(exported.contains("0,Combat,"))
+        XCTAssertTrue(exported.contains("1,Combat.Fire,火"))
+    }
+
+    func testLegacyCategoryColumnIsIgnored() {
+        let csv = """
+        Name,Tag,DevComment,CategoryText
+        0,Combat.Fire,火,Combat
+        """
+        let parsed = CSVBridge.parse(csv)
+        XCTAssertEqual(parsed.tags.map(\.name), ["Combat.Fire"])
+        XCTAssertEqual(parsed.tags[0].devComment, "火")
     }
 
     func testEmptyFirstColumnHeaderIsDataTable() {
-        let csv = ",Tag,CategoryText\n0,Combat.Fire,Combat\n"
+        let csv = ",Tag,DevComment\n0,Combat.Fire,火\n"
         XCTAssertEqual(CSVBridge.parse(csv).format, .dataTableCSV)
     }
 
     func testINI_export() {
-        let tags = [GameplayTag(name: "Combat.Fire", devComment: "火", category: "Combat")]
+        let tags = [GameplayTag(name: "Combat.Fire", devComment: "火")]
         let ini = CSVBridge.export(TagTreeBuilder.build(from: tags), format: .ini)
         let lines = ini.split(separator: "\n").map(String.init)
         XCTAssertEqual(lines[0], "[/Script/GameplayTags.GameplayTagsList]")
@@ -118,20 +127,19 @@ final class CSVBridgeTests: XCTestCase {
 
     func testNameColumnCSV_parse() {
         let csv = """
-        Name,DevComment,Category
-        Combat.Fire,火,Combat
-        Status.Burning,燃烧,
+        Name,DevComment
+        Combat.Fire,火
+        Status.Burning,燃烧
         """
         let parsed = CSVBridge.parse(csv)
         XCTAssertEqual(parsed.format, .dataTableCSV)
         XCTAssertEqual(parsed.tags.map(\.name), ["Combat.Fire", "Status.Burning"])
         XCTAssertEqual(parsed.tags[0].devComment, "火")
-        XCTAssertEqual(parsed.tags[0].category, "Combat")
     }
 
     func testFormatAutoDetect() {
-        XCTAssertEqual(CSVBridge.parse("Name,Tag,DevComment,CategoryText\n0,A,B,C").format, .dataTableCSV)
-        XCTAssertEqual(CSVBridge.parse(",Tag,DevComment,CategoryText\n0,A,B,C").format, .dataTableCSV)
+        XCTAssertEqual(CSVBridge.parse("Name,Tag,DevComment\n0,A,B").format, .dataTableCSV)
+        XCTAssertEqual(CSVBridge.parse(",Tag,DevComment\n0,A,B").format, .dataTableCSV)
         XCTAssertEqual(CSVBridge.parse("Name,DevComment\nA,B").format, .dataTableCSV)
         XCTAssertEqual(CSVBridge.parse("[/Script/GameplayTags.GameplayTagsList]\nGameplayTagList=(Tag=\"A\")").format, .ini)
     }
@@ -168,7 +176,7 @@ final class TagStoreTests: XCTestCase {
         let ini = store.exportText(format: .ini)
         XCTAssertTrue(ini.contains("[/Script/GameplayTags.GameplayTagsList]"))
         let csv = store.exportText(format: .dataTableCSV)
-        XCTAssertTrue(csv.hasPrefix("Name,Tag,DevComment,CategoryText"))
+        XCTAssertTrue(csv.hasPrefix("Name,Tag,DevComment"))
     }
 
     @MainActor
@@ -196,8 +204,8 @@ final class TagStoreTests: XCTestCase {
         let dir = FileManager.default.temporaryDirectory
         let url = dir.appendingPathComponent("SwiftGameplayTagPreview-\(UUID().uuidString).csv")
         let source = """
-        Name,Tag,DevComment,CategoryText
-        0,Combat.Fire,火,Combat
+        Name,Tag,DevComment
+        0,Combat.Fire,火
         """
         try source.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
@@ -289,14 +297,9 @@ final class TagStoreTests: XCTestCase {
     func testUpdateMetadata() {
         let store = TagStore()
         let id = store.addRoot(name: "Foo")
-        store.updateMetadata(id: id, devComment: "测试", category: "Test", isHidden: true)
+        store.updateMetadata(id: id, devComment: "测试")
         let n = store.findNode(id: id)!
         XCTAssertEqual(n.tag.devComment, "测试")
-        XCTAssertEqual(n.tag.category, "Test")
-        XCTAssertTrue(n.tag.isHidden)
-
-        store.updateMetadata(id: id, clearCategory: true)
-        XCTAssertNil(n.tag.category)
     }
 
     @MainActor
@@ -380,7 +383,7 @@ final class TagStoreTests: XCTestCase {
 
     func testNodeIDMatchesTagIDAfterTreeBuild() {
         let tags = [
-            GameplayTag(name: "Character.Stats.Health", devComment: "生命值", category: "Stats")
+            GameplayTag(name: "Character.Stats.Health", devComment: "生命值")
         ]
         let roots = TagTreeBuilder.build(from: tags)
         GameplayTagNode.forEach(in: roots) { node in

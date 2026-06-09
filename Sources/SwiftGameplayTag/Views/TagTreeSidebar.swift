@@ -95,9 +95,6 @@ struct TagTreeSidebar: View {
                     if let id = ids.first, let node = store.findNode(id: id) {
                         Button("添加子 Tag") { addChildParentID = node.id }
                         Button("重命名…") { beginRename(node) }
-                        Button("切换隐藏") {
-                            store.updateMetadata(id: node.id, isHidden: !node.tag.isHidden)
-                        }
                         Divider()
                         Button("删除", role: .destructive) { store.delete([node.id]) }
                     }
@@ -327,12 +324,10 @@ private struct TreeNodeLabel: View {
             if devComment.isEmpty {
                 Text(node.displayName)
                     .lineLimit(1)
-                    .foregroundStyle(node.tag.isHidden ? .secondary : .primary)
             } else {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(node.displayName)
                         .lineLimit(1)
-                        .foregroundStyle(node.tag.isHidden ? .secondary : .primary)
 
                     Text(devComment)
                         .font(.caption)
