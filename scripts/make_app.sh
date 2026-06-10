@@ -54,7 +54,7 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key>
   <string>1.0.0</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>1.0.0</string>
   <key>LSMinimumSystemVersion</key>
   <string>26.0</string>
   <key>LSApplicationCategoryType</key>
