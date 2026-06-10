@@ -350,7 +350,16 @@ private struct TreeRenameField: View {
 
     var body: some View {
         TextField("", text: $text)
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.plain)
+            .font(.body)
+            .foregroundStyle(Color(nsColor: .textColor))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
+            .overlay {
+                RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(Color.accentColor.opacity(0.85), lineWidth: 1.5)
+            }
             .focused($isFocused)
             .onSubmit(onCommit)
             .onExitCommand(perform: onCancel)

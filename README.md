@@ -2,6 +2,16 @@
 
 一个用 SwiftUI 实现的、可视化编辑 Unreal Engine 5 `GameplayTag` 的 macOS 工具。
 
+## 截图
+
+左侧树形层级 + 右侧表格内联编辑；树与表格选择同步，支持搜索与拖拽。
+
+![主界面：树形层级与表格编辑](docs/screenshots/editor-main.png)
+
+另存为时可选择 UE5 DataTable CSV 或 ini，并预览导出内容。
+
+![另存为：UE5 ini 格式预览](docs/screenshots/save-as-ini.png)
+
 ## 功能
 
 - 左侧 **树形面板**：层级展示 Tag，支持新增 / 重命名 / 删除 / 拖拽改父子与同级顺序
