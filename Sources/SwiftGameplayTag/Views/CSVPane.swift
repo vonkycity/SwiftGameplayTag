@@ -7,6 +7,8 @@ struct CSVPane: View {
     ]
     /// Table 内部选择状态。macOS Table 在外部改 store 时不会自己刷新高亮,需要本地镜像。
     @State private var tableSelection: Set<UUID> = []
+    /// 避免 Table → store 回写后再把选择同步/滚动覆盖掉。
+    @State private var selectionDrivenByTable = false
 
     private var sortedRows: [GameplayTag] {
         store.filteredFlatTags.sorted(using: sortOrder)
@@ -16,10 +18,14 @@ struct CSVPane: View {
         ScrollViewReader { proxy in
             Table(sortedRows, selection: $tableSelection, sortOrder: $sortOrder) {
                 TableColumn("Name", value: \.name) { tag in
-                    TableTextCell(value: tag.name, monospaced: true) { newValue in
+                    let selected = tableSelection.contains(tag.id)
+                    TableTextCell(
+                        value: tag.name,
+                        monospaced: true,
+                        emphasisColor: selected ? nil : nameColor(for: tag)
+                    ) { newValue in
                         commitName(id: tag.id, text: newValue)
                     }
-                    .foregroundStyle(nameColor(for: tag))
                     .id(tag.id)
                 }
                 .width(min: 200, ideal: 280)
@@ -40,6 +46,7 @@ struct CSVPane: View {
                 scrollToSelection(store.selectedNodeID, proxy: proxy)
             }
             .onChange(of: store.selectedNodeIDs) { _, newValue in
+                guard !selectionDrivenByTable else { return }
                 pushStoreSelectionToTable(newValue)
                 scrollToSelection(newValue.first, proxy: proxy)
             }
@@ -48,12 +55,15 @@ struct CSVPane: View {
                 scrollToSelection(store.selectedNodeID, proxy: proxy)
             }
             .onChange(of: tableSelection) { _, newValue in
+                selectionDrivenByTable = true
                 pushTableSelectionToStore(newValue)
+                DispatchQueue.main.async {
+                    selectionDrivenByTable = false
+                }
             }
         }
     }
 
-    /// 左侧树 / 外部改 store → 强制同步到 Table 本地选择。
     private func pushStoreSelectionToTable(_ ids: Set<UUID>) {
         guard tableSelection != ids else { return }
         tableSelection = ids
@@ -63,18 +73,8 @@ struct CSVPane: View {
         tableSelection = store.selectedNodeIDs
     }
 
-    /// Table 用户点击 → 写回 store。忽略 Table 误报的空白选择(行尚未渲染时常见)。
     private func pushTableSelectionToStore(_ ids: Set<UUID>) {
         guard ids != store.selectedNodeIDs else { return }
-
-        if ids.isEmpty,
-           let current = store.selectedNodeID,
-           sortedRows.contains(where: { $0.id == current }) {
-            DispatchQueue.main.async {
-                tableSelection = store.selectedNodeIDs
-            }
-            return
-        }
 
         if ids.count == 1 {
             store.selectNodeFromTable(ids.first)
@@ -125,23 +125,34 @@ struct CSVPane: View {
 private struct TableTextCell: View {
     let value: String
     var monospaced = false
+    var emphasisColor: Color?
     let onCommit: (String) -> Void
 
     @State private var draft: String
     @FocusState private var isFocused: Bool
 
-    init(value: String, monospaced: Bool = false, onCommit: @escaping (String) -> Void) {
+    init(
+        value: String,
+        monospaced: Bool = false,
+        emphasisColor: Color? = nil,
+        onCommit: @escaping (String) -> Void
+    ) {
         self.value = value
         self.monospaced = monospaced
+        self.emphasisColor = emphasisColor
         self.onCommit = onCommit
         _draft = State(initialValue: value)
+    }
+
+    private var font: Font {
+        monospaced ? .system(.body, design: .monospaced) : .body
     }
 
     var body: some View {
         TextField("", text: $draft)
             .textFieldStyle(.plain)
-            .font(monospaced ? .system(.body, design: .monospaced) : .body)
-            .foregroundStyle(Color(nsColor: .textColor))
+            .font(font)
+            .modifier(OptionalForegroundStyle(color: emphasisColor))
             .focused($isFocused)
             .onChange(of: isFocused) { _, focused in
                 if !focused { commitIfChanged() }
@@ -155,5 +166,18 @@ private struct TableTextCell: View {
     private func commitIfChanged() {
         guard draft != value else { return }
         onCommit(draft)
+    }
+}
+
+/// 选中行不覆盖前景色,交给 Table 原生绘制;未选中行可显示校验色。
+private struct OptionalForegroundStyle: ViewModifier {
+    let color: Color?
+
+    func body(content: Content) -> some View {
+        if let color {
+            content.foregroundStyle(color)
+        } else {
+            content
+        }
     }
 }
