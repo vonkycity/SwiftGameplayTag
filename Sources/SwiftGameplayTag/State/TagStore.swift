@@ -27,6 +27,8 @@ final class TagStore {
     private(set) var shouldRevealSelectionInTree = false
     /// 节点内容变更计数,驱动左侧树在 metadata 编辑后刷新。
     private(set) var contentRevision: Int = 0
+    /// 导出内容变更计数;打开预览 / 保存前再生成 csvText。
+    private(set) var exportRevision: Int = 0
 
     /// 当前选中的单个节点(左侧 List 使用)。
     var selectedNodeID: UUID? { selectedNodeIDs.first }
@@ -64,6 +66,8 @@ final class TagStore {
     @ObservationIgnored private var redoStack: [UndoEntry] = []
     @ObservationIgnored private var loadedFileText: String?
     @ObservationIgnored private let maxHistory = 100
+    @ObservationIgnored private var searchCacheQuery: String = ""
+    @ObservationIgnored private var searchCacheVisible: Set<UUID>?
 
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
@@ -77,6 +81,10 @@ final class TagStore {
     func searchVisibleNodeIDs() -> Set<UUID>? {
         let q = searchQuery.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return nil }
+
+        if q == searchCacheQuery, let searchCacheVisible {
+            return searchCacheVisible
+        }
 
         var hits: Set<UUID> = []
         GameplayTagNode.forEach(in: roots) { node in
@@ -93,6 +101,8 @@ final class TagStore {
                 current = node.parent
             }
         }
+        searchCacheQuery = q
+        searchCacheVisible = visible
         return visible
     }
 
@@ -199,7 +209,7 @@ final class TagStore {
         let unique = uniqueName(based: name, parentName: nil)
         let node = GameplayTagNode(tag: GameplayTag(name: unique))
         roots.append(node)
-        rebuildDerivedState(regenerateCSV: true)
+        rebuildDerivedState()
         markDirty()
         return node.id
     }
@@ -212,7 +222,7 @@ final class TagStore {
         let unique = uniqueName(based: baseName, parentName: parent.tag.name)
         let node = GameplayTagNode(tag: GameplayTag(name: unique), parent: parent)
         parent.children.append(node)
-        rebuildDerivedState(regenerateCSV: true)
+        rebuildDerivedState()
         markDirty()
         return node.id
     }
@@ -232,7 +242,7 @@ final class TagStore {
                 roots.removeAll { $0.id == node.id }
             }
         }
-        rebuildDerivedState(regenerateCSV: true)
+        rebuildDerivedState()
         markDirty()
         if let sel = selectedNodeID, ids.contains(sel) {
             selectNode(nil)
@@ -252,7 +262,7 @@ final class TagStore {
                 child.tag.name = newName + "." + child.tag.name.dropFirst(prefix.count)
             }
         }
-        rebuildDerivedState(regenerateCSV: true)
+        rebuildDerivedState()
         markDirty()
     }
 
@@ -264,7 +274,12 @@ final class TagStore {
         var updated = node.tag
         updated.devComment = devComment
         node.tag = updated
-        rebuildDerivedState(regenerateCSV: false)
+        if let idx = flatTags.firstIndex(where: { $0.id == id }) {
+            flatTags[idx].devComment = devComment
+        }
+        invalidateSearchCache()
+        exportRevision &+= 1
+        contentRevision &+= 1
         markDirty()
     }
 
@@ -307,10 +322,10 @@ final class TagStore {
             updatePathPrefix(node)
             makeNameUnique(node)
             fixAllParents()
-            rebuildDerivedState(regenerateCSV: true)
+            rebuildDerivedState()
         } else {
             fixAllParents()
-            rebuildDerivedState(regenerateCSV: false)
+            rebuildDerivedState()
         }
         markDirty()
     }
@@ -364,10 +379,10 @@ final class TagStore {
             updatePathPrefix(node)
             makeNameUnique(node)
             fixAllParents()
-            rebuildDerivedState(regenerateCSV: true)
+            rebuildDerivedState()
         } else {
             fixAllParents()
-            rebuildDerivedState(regenerateCSV: false)
+            rebuildDerivedState()
         }
         markDirty()
     }
@@ -457,7 +472,7 @@ final class TagStore {
         }
         let built = TagTreeBuilder.build(from: tags)
         self.roots = built
-        rebuildDerivedState(regenerateCSV: true)
+        rebuildDerivedState()
     }
 
     private func recordTreeHistory() {
@@ -515,17 +530,26 @@ final class TagStore {
     private func applyMetadataSnapshot(nodeID: UUID, snapshot: GameplayTag) {
         guard let node = findNode(id: nodeID) else { return }
         node.tag.devComment = snapshot.devComment
-        rebuildDerivedState(regenerateCSV: false)
+        if let idx = flatTags.firstIndex(where: { $0.id == nodeID }) {
+            flatTags[idx].devComment = snapshot.devComment
+        }
+        invalidateSearchCache()
+        exportRevision &+= 1
+        contentRevision &+= 1
     }
 
     private func markDirty() {
         isDirty = true
     }
 
-    private func rebuildDerivedState(regenerateCSV: Bool) {
-        if regenerateCSV {
-            refreshCSVText()
-        }
+    private func invalidateSearchCache() {
+        searchCacheQuery = ""
+        searchCacheVisible = nil
+    }
+
+    private func rebuildDerivedState() {
+        invalidateSearchCache()
+        exportRevision &+= 1
 
         var flat: [GameplayTag] = []
         var index: [UUID: GameplayTagNode] = [:]

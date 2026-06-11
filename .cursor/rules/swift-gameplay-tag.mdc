@@ -49,7 +49,7 @@ Sources/SwiftGameplayTag/
 
 - 左侧树**默认折叠**；用户点击树/表格或添加子 Tag 时才展开路径
 - 选择同步：`selectedNodeIDs: Set<UUID>`；Table 需本地 `tableSelection` 镜像
-- 拖拽：右侧 `≡` 手柄；folder 上 drop 为子级，leaf 上为同级
+- 拖拽：右侧 `≡` 手柄；默认 drop 为子级，Option/Shift 为同级前/后
 - 单一 `.fileImporter` 放在 `ContentView`，按扩展名自动识别 CSV/ini
 
 ## 编码原则

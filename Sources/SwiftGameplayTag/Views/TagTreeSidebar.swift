@@ -141,7 +141,7 @@ struct TagTreeSidebar: View {
         HStack(spacing: 6) {
             Image(systemName: "arrow.up.to.line")
                 .foregroundStyle(.secondary)
-            Text("拖到此处移至根级别 · 从 ≡ 手柄拖动")
+            Text("拖到此处移至根级别 · ≡ 拖动 · Option/Shift 同级排序")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

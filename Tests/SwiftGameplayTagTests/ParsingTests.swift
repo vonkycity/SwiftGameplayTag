@@ -223,6 +223,16 @@ final class TagStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testMoveToLeafBecomesChild() {
+        let store = TagStore()
+        let parent = store.addRoot(name: "Combat")
+        let leaf = store.addRoot(name: "Status")
+        store.move(id: leaf, toParent: parent)
+        XCTAssertEqual(store.findNode(id: leaf)?.tag.name, "Combat.Status")
+        XCTAssertEqual(store.findNode(id: parent)?.children.first?.id, leaf)
+    }
+
+    @MainActor
     func testMoveToParent() {
         let store = TagStore()
         let r1 = store.addRoot(name: "Root1")

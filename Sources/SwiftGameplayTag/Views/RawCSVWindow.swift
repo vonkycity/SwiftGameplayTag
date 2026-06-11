@@ -44,7 +44,7 @@ struct RawCSVWindow: View {
             .padding(12)
         }
         .onAppear { store.refreshCSVText() }
-        .onChange(of: store.contentRevision) { _, _ in
+        .onChange(of: store.exportRevision) { _, _ in
             store.refreshCSVText()
         }
         .onChange(of: store.isDirty) { _, _ in

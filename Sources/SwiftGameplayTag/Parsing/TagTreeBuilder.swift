@@ -6,6 +6,7 @@ enum TagTreeBuilder {
     static func build(from tags: [GameplayTag]) -> [GameplayTagNode] {
         // 用哨兵节点,它的 children 数组就是最终的 roots。
         let sentinel = GameplayTagNode(tag: GameplayTag(name: ""))
+        var nodeByPath: [String: GameplayTagNode] = ["": sentinel]
 
         for tag in tags {
             let parts = tag.name.split(separator: ".").map(String.init)
@@ -18,12 +19,13 @@ enum TagTreeBuilder {
                 path.append(part)
                 let fullPath = path.joined(separator: ".")
                 let node: GameplayTagNode
-                if let existing = parent.children.first(where: { $0.tag.name == fullPath }) {
+                if let existing = nodeByPath[fullPath] {
                     node = existing
                 } else {
                     let placeholder = GameplayTag(name: fullPath)
                     node = GameplayTagNode(tag: placeholder)
                     parent.children.append(node)
+                    nodeByPath[fullPath] = node
                 }
                 if idx == parts.count - 1 {
                     node.tag = tag

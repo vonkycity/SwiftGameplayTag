@@ -7,6 +7,8 @@ struct ContentView: View {
     @Binding var showRaw: Bool
     @Binding var showAddRoot: Bool
     @State private var alertMessage: String?
+    @State private var searchDraft = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
 
     var body: some View {
         @Bindable var store = store
@@ -19,9 +21,25 @@ struct ContentView: View {
             CSVPane()
         }
         .navigationTitle(store.windowTitle)
-        .searchable(text: $store.searchQuery,
+        .searchable(text: $searchDraft,
                     placement: .sidebar,
                     prompt: "搜索 Tag 名称（例：Fire）")
+        .onAppear {
+            searchDraft = store.searchQuery
+        }
+        .onChange(of: searchDraft) { _, newValue in
+            searchDebounceTask?.cancel()
+            searchDebounceTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled else { return }
+                store.searchQuery = newValue
+            }
+        }
+        .onChange(of: store.searchQuery) { _, newValue in
+            if searchDraft != newValue {
+                searchDraft = newValue
+            }
+        }
         .toolbar { ToolbarItems(showRaw: $showRaw, showAddRoot: $showAddRoot) }
         .fileImporter(
             isPresented: $fileCommands.openPicker,

@@ -49,7 +49,7 @@ extension TagStore {
 
 func tagDropAction(for target: GameplayTagNode, modifiers: EventModifiers) -> TagDropAction {
     if modifiers.contains(.option) { return .beforeSibling }
-    if target.isLeaf { return .afterSibling }
+    if modifiers.contains(.shift) { return .afterSibling }
     return .child
 }
 
@@ -63,7 +63,7 @@ struct TagDragHandle: View {
             .foregroundStyle(.tertiary)
             .frame(width: 14, height: 14)
             .contentShape(Rectangle())
-            .help("拖拽以移动 Tag")
+            .help("拖拽以移动 Tag · Option 同级前 · Shift 同级后")
             .draggable(TagDragPayload(id: nodeID))
     }
 }
