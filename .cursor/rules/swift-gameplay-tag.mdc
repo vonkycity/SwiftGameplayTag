@@ -9,7 +9,9 @@ alwaysApply: true
 
 - macOS SwiftUI 工具，编辑 Unreal Engine 5 **GameplayTag**
 - 参考实现：`/Volumes/TiPlus7100/SwiftGameTools/GameplayTags`
+- 远程仓库：`git@github.com:vonkycity/SwiftGameplayTag.git`
 - UI 文案使用**中文**；注释可中文
+- 典型规模 ~650 Tag；当前性能足够，勿过度优化
 
 ## 技术栈
 
@@ -17,19 +19,23 @@ alwaysApply: true
 - 目标平台：**macOS 26+**
 - 状态管理：`@Observable`（`TagStore`、`FileCommands`），通过 `.environment()` 注入
 - 勿回退到 `ObservableObject` / `@Published`
+- 开发：直接 `open Package.swift`（无 `generate-xcodeproj`）；打包 `./scripts/make_app.sh`
 
 ## 目录与职责
 
 ```
 Sources/SwiftGameplayTag/
-├── State/TagStore.swift      # 树 CRUD、撤销/重做、选择、文件状态
-├── State/FileCommands.swift  # 打开/保存触发器
-├── Parsing/CSVBridge.swift   # CSV / ini 互转
-├── Parsing/TagTreeBuilder.swift
-├── Views/ContentView.swift   # NavigationSplitView 双栏
-├── Views/TagTreeSidebar.swift
-├── Views/CSVPane.swift
-└── Resources/sample.csv      # 内置示例（bundle 资源）
+├── State/TagStore.swift        # 树 CRUD、撤销/重做、选择、搜索缓存、懒 export
+├── State/FileCommands.swift    # 打开/保存触发器
+├── Parsing/CSVBridge.swift     # CSV / ini 互转、格式自动检测
+├── Parsing/CSVParser.swift
+├── Parsing/TagTreeBuilder.swift  # 路径索引 O(n) 建树
+├── Views/ContentView.swift     # 双栏、search debounce、fileImporter
+├── Views/TagTreeSidebar.swift  # 左侧树、拖拽、重命名
+├── Views/CSVPane.swift         # 右侧 Table（见下方陷阱）
+├── Views/RawCSVWindow.swift    # 原始/导出预览
+├── Views/SaveAsSheet.swift
+└── Resources/sample.csv
 ```
 
 ## 文件格式（重要）
@@ -44,29 +50,52 @@ Sources/SwiftGameplayTag/
 - `GameplayTag` 只有 `name`、`devComment`；**无 Category、无 Hidden**
 - 打开旧 CSV 若含 `CategoryText` 列，解析时**忽略**
 - 原始文件预览：未修改时显示磁盘原文；修改后显示当前格式导出
+- UE 导入说明见 `README.md`「导入到 UE5」
+
+## TagStore 要点
+
+- **懒 export**：编辑时不调用 `CSVBridge.export`；`exportRevision` 变更时 `refreshCSVText()`（预览/保存时）
+- **metadata 增量**：`updateMetadata` 只改节点 + `flatTags` 条目，不跑完整 `rebuildDerivedState`
+- **搜索缓存**：`searchVisibleNodeIDs()` 按 query 缓存；树变更时 `invalidateSearchCache()`
+- **撤销**：树操作为整表 snapshot；metadata 为粒度 undo entry
+- 索引：`nodeByID` 在 `rebuildDerivedState` 维护；`findNode(id:)` O(1)
 
 ## UI 行为
 
-- 左侧树**默认折叠**；用户点击树/表格或添加子 Tag 时才展开路径
-- 选择同步：`selectedNodeIDs: Set<UUID>`；Table 需本地 `tableSelection` 镜像
-- 拖拽：右侧 `≡` 手柄；默认 drop 为子级，Option/Shift 为同级前/后
-- 单一 `.fileImporter` 放在 `ContentView`，按扩展名自动识别 CSV/ini
+- 左侧树**默认折叠**；点击树/表格或添加子 Tag 时才展开路径（`shouldRevealSelectionInTree`）
+- **选择同步**：`selectedNodeIDs` ↔ 树；Table 本地镜像 `tableSelection`
+- **搜索**：`ContentView` 用 `searchDraft` + **200ms debounce** 写入 `store.searchQuery`
+- **拖拽**（左侧 `≡` 手柄）：默认 drop **子级**（含 leaf）；Option 同级前；Shift 同级后；顶栏区域 → 根
+- 树重命名输入框：`textBackgroundColor` 背景 + accent 边框（勿用 `.roundedBorder`）
+- 单一 `.fileImporter` 在 `ContentView`，按扩展名识别 CSV/ini
+
+## CSVPane 陷阱（勿回归）
+
+macOS `Table` + 自定义单元格易出选中/颜色 bug，修改前必读：
+
+1. **双向同步**：Table 选中 → `pushTableSelectionToStore`；Store → `pushStoreSelectionToTable`。Table 驱动时用 `selectionDrivenByTable` 阻止 Store 的 `onChange` 回写/滚动覆盖鼠标选择
+2. **禁止**「空选择恢复」逻辑（会抢鼠标换行）
+3. **选中行文字**：`TextField` **不要**设 `alternateSelectedControlTextColor` 或固定 `textColor`；选中时 `emphasisColor = nil`，交给 Table 原生绘制
+4. **未选中行**才用红/橙校验色（`OptionalForegroundStyle`）
+5. **禁止**单元格 `Text` + `onTapGesture` / `contentShape` 拦截点击（会导致鼠标无法选中）
+6. 勿用 Text/编辑双模式替代 TextField 来解决颜色（曾导致选中失效与闪烁）
 
 ## 编码原则
 
 - **最小 diff**：只改与任务相关的文件
 - 匹配现有命名、结构与注释风格；不过度抽象
 - 有意义的测试放 `Tests/SwiftGameplayTagTests/ParsingTests.swift`
-- 未要求时不改 README、不主动 git commit
+- 未要求时不改 README、不主动 git commit / push
 
 ## 构建与打包
 
 ```bash
 swift test
 swift build -c release
-./scripts/make_app.sh          # 生成 SwiftGameplayTag.app
-swift scripts/generate_app_icon.swift Resources/AppIcon-1024.png  # 重生成图标
+./scripts/make_app.sh          # SwiftGameplayTag.app
+swift scripts/generate_app_icon.swift Resources/AppIcon-1024.png
 ```
 
-- 图标：`Resources/AppIcon.icns`（UE 深色底，由 `scripts/generate_app_icon.swift` 生成）
+- 图标：UE 深色底 + **U** + 右下角 **Tag** 徽章（`scripts/generate_app_icon.swift`）
+- `CFBundleVersion` = `1.0.0`（与 ShortVersion 一致）
 - `.gitignore` 已忽略 `.build/`、`SwiftGameplayTag.app/`
