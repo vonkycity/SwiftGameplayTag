@@ -10,11 +10,19 @@ CONTENTS="${APP_BUNDLE}/Contents"
 MACOS_DIR="${CONTENTS}/MacOS"
 RESOURCES_DIR="${CONTENTS}/Resources"
 
-BIN_SRC="${PROJECT_DIR}/.build/release/${APP_NAME}"
+BIN_DIR="$(cd "$PROJECT_DIR" && swift build -c release --show-bin-path)"
+BIN_SRC="${BIN_DIR}/${APP_NAME}"
+BUNDLE_NAME="${APP_NAME}_${APP_NAME}.bundle"
+BUNDLE_SRC="${BIN_DIR}/${BUNDLE_NAME}"
 ICON_SRC="${PROJECT_DIR}/Resources/AppIcon.icns"
 
 if [[ ! -f "$BIN_SRC" ]]; then
   echo "❌ 找不到 ${BIN_SRC}，请先执行 swift build -c release"
+  exit 1
+fi
+
+if [[ ! -d "$BUNDLE_SRC" ]]; then
+  echo "❌ 找不到 ${BUNDLE_SRC}，请先执行 swift build -c release"
   exit 1
 fi
 
@@ -25,6 +33,11 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 echo "📋 复制二进制..."
 cp "$BIN_SRC" "$MACOS_DIR/${APP_NAME}"
 chmod +x "$MACOS_DIR/${APP_NAME}"
+
+echo "📋 复制资源 bundle..."
+cp -R "$BUNDLE_SRC" "${RESOURCES_DIR}/"
+# SwiftPM 生成的 Bundle.module 会在 .app 根目录查找 {Target}_{Target}.bundle
+ln -sf "Contents/Resources/${BUNDLE_NAME}" "${APP_BUNDLE}/${BUNDLE_NAME}"
 
 # 复制图标（如果存在）
 if [[ -f "$ICON_SRC" ]]; then
