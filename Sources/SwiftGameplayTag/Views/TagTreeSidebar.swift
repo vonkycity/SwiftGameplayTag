@@ -160,11 +160,11 @@ struct TagTreeSidebar: View {
 
     @ViewBuilder
     private func row(for item: VisibleNode) -> some View {
-        HStack(spacing: 4) {
+        HStack(alignment: item.devComment.isEmpty ? .center : .top, spacing: 4) {
             Color.clear.frame(width: CGFloat(item.depth) * 14)
 
             if item.isLeaf {
-                Color.clear.frame(width: 14, height: 1)
+                Color.clear.frame(width: 14, height: 16)
             } else {
                 Button {
                     toggleExpanded(item.node.id)
@@ -172,7 +172,7 @@ struct TagTreeSidebar: View {
                     Image(systemName: expandedNodeIDs.contains(item.node.id) ? "chevron.down" : "chevron.right")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 14, height: 14)
+                        .frame(width: 14, height: 16)
                 }
                 .buttonStyle(.borderless)
             }
@@ -315,11 +315,11 @@ private struct TreeNodeLabel: View {
     let isLeaf: Bool
 
     var body: some View {
-        HStack(alignment: devComment.isEmpty ? .center : .firstTextBaseline, spacing: 6) {
+        HStack(alignment: devComment.isEmpty ? .center : .top, spacing: 6) {
             Image(systemName: isLeaf ? "tag" : "folder")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(width: 14, alignment: .center)
+                .frame(width: 14, height: 16, alignment: .center)
 
             if devComment.isEmpty {
                 Text(node.displayName)
