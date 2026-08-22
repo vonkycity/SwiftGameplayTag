@@ -414,4 +414,29 @@ final class TagStoreTests: XCTestCase {
         store.selectNode(health.id)
         XCTAssertTrue(store.selectedNodeIDs.contains(health.id))
     }
+
+    @MainActor
+    func testWindowPathDisplayUsesSampleWhenNoFile() {
+        let store = TagStore()
+        store.loadSample()
+        XCTAssertEqual(store.windowPathDisplay, "内置示例 sample.csv")
+    }
+
+    func testDisplayPathUsesTildeForHome() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let path = home + "/Tags/DefaultGameplayTags.ini"
+        XCTAssertEqual(
+            DisplayPath.abbreviated(path: path, maxChars: 80),
+            "~/Tags/DefaultGameplayTags.ini"
+        )
+    }
+
+    func testDisplayPathAbbreviatesLongPath() {
+        let path = "/Volumes/TiPlus7100/Projects/GameTools/MyGame/Config/Tags/DefaultGameplayTags.ini"
+        let short = DisplayPath.abbreviated(path: path, maxChars: 40)
+        XCTAssertTrue(short.contains("DefaultGameplayTags.ini"))
+        XCTAssertTrue(short.contains("…"))
+        XCTAssertLessThanOrEqual(short.count, 48)
+        XCTAssertTrue(short.hasPrefix("/Volumes"))
+    }
 }

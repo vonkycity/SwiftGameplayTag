@@ -55,6 +55,12 @@ final class TagStore {
         isDirty ? "GameplayTag 编辑器 — 已修改" : "GameplayTag 编辑器"
     }
 
+    /// 标题栏副标题:当前文件路径(过长则中间省略)。
+    var windowPathDisplay: String {
+        guard let url = currentURL else { return "内置示例 sample.csv" }
+        return DisplayPath.abbreviated(url)
+    }
+
     // MARK: - 撤销/重做
 
     private enum UndoEntry {
@@ -619,5 +625,53 @@ final class TagStore {
         if node.tag.name.range(of: query, options: .caseInsensitive) != nil { return true }
         if node.tag.devComment.range(of: query, options: .caseInsensitive) != nil { return true }
         return false
+    }
+}
+
+/// 把绝对路径缩写成适合标题栏的短文本:家目录换成 `~`,过长则保留开头与末尾。
+enum DisplayPath {
+    static func abbreviated(_ url: URL, maxChars: Int = 56) -> String {
+        abbreviated(path: url.path(percentEncoded: false), maxChars: maxChars)
+    }
+
+    static func abbreviated(path: String, maxChars: Int = 56) -> String {
+        let tilde = (path as NSString).abbreviatingWithTildeInPath
+        if tilde.count <= maxChars { return tilde }
+
+        var parts = (tilde as NSString).pathComponents
+        guard let file = parts.popLast() else { return tilde }
+
+        var leading = ""
+        if parts.first == "~" {
+            leading = "~"
+            parts.removeFirst()
+        } else if parts.first == "/" {
+            parts.removeFirst()
+            if let first = parts.first {
+                leading = "/" + first
+                parts.removeFirst()
+            }
+        }
+
+        var kept = [file]
+        func assembled() -> String {
+            let tail = kept.joined(separator: "/")
+            if parts.isEmpty {
+                return leading.isEmpty ? tail : "\(leading)/\(tail)"
+            }
+            if leading.isEmpty {
+                return "…/\(tail)"
+            }
+            return "\(leading)/…/\(tail)"
+        }
+
+        var best = assembled()
+        while !parts.isEmpty {
+            kept.insert(parts.removeLast(), at: 0)
+            let candidate = assembled()
+            if candidate.count > maxChars { break }
+            best = candidate
+        }
+        return best
     }
 }

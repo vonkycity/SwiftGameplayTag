@@ -21,6 +21,7 @@ struct ContentView: View {
             CSVPane()
         }
         .navigationTitle(store.windowTitle)
+        .navigationSubtitle(store.windowPathDisplay)
         .searchable(text: $searchDraft,
                     placement: .sidebar,
                     prompt: "搜索 Tag 名称（例：Fire）")
